@@ -1,0 +1,13 @@
+{
+  "name": "frugal-section-a-q1",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start-testbed": "node server.js",
+    "test:q1": "node q1_runner.js"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0",
+    "ws": "^8.16.0"
+  }
+}

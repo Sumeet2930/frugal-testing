@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Canvas WebSocket Testbed</title>
+  <style>
+    body { background: #121212; color: #fff; font-family: monospace; display: flex; flex-direction: column; align-items: center; }
+    #canvas-container { position: relative; margin-top: 20px; }
+    canvas { border: 1px solid #333; }
+    #error-boundary { display: none; margin-top: 15px; color: #ff5252; background: #2a0000; padding: 10px 20px; border-radius: 4px; border: 1px solid #ff5252; }
+    #status { margin-top: 10px; color: #aaa; }
+  </style>
+</head>
+<body>
+  <h2>Real-Time Dynamic Canvas Trading Testbed</h2>
+  <div id="status">Connecting to stream...</div>
+  <div id="canvas-container">
+    <canvas id="marketCanvas" width="600" height="400"></canvas>
+  </div>
+  <div id="error-boundary">CRITICAL ERROR: Corrupted Mathematical Payload Intercepted by UI Boundary.</div>
+
+  <script>
+    const canvas = document.getElementById('marketCanvas');
+    const ctx = canvas.getContext('2d');
+    const statusDiv = document.getElementById('status');
+    const errorDiv = document.getElementById('error-boundary');
+
+    // Internal State
+    window.appState = {
+      status: 'LOADING', // LOADING (gray), ACTIVE (cyan), DRAGGED, CLICKED
+      boxX: 100,
+      boxY: 150,
+      boxWidth: 80,
+      boxHeight: 80,
+      balance: 100.0,
+      hasError: false
+    };
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (window.appState.hasError) {
+        ctx.fillStyle = '#ff1744';
+        ctx.fillText("CORRUPTED ENGINE STATE", 200, 200);
+        return;
+      }
+
+      // Render Dynamic Interactive Node
+      if (window.appState.status === 'LOADING') {
+        ctx.fillStyle = '#808080'; // Gray loading threshold
+      } else if (window.appState.status === 'ACTIVE') {
+        ctx.fillStyle = '#00E5FF'; // Active Cyan
+      } else if (window.appState.status === 'DRAGGED') {
+        ctx.fillStyle = '#76FF03'; // Dragged Neon Green
+      } else if (window.appState.status === 'CLICKED') {
+        ctx.fillStyle = '#FFD600'; // Final Yellow
+      }
+
+      ctx.fillRect(window.appState.boxX, window.appState.boxY, window.appState.boxWidth, window.appState.boxHeight);
+
+      // Render balance
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '14px monospace';
+      ctx.fillText(`Balance: ${window.appState.balance}`, 20, 30);
+      ctx.fillText(`State: ${window.appState.status}`, 20, 50);
+
+      requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
+
+    // Canvas Mouse Handling
+    let isDragging = false;
+    let startX = 0;
+
+    canvas.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      if (x >= window.appState.boxX && x <= window.appState.boxX + window.appState.boxWidth &&
+          y >= window.appState.boxY && y <= window.appState.boxY + window.appState.boxHeight) {
+        isDragging = true;
+        startX = x;
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (isDragging) {
+        const rect = canvas.getBoundingClientRect();
+        const currentX = e.clientX - rect.left;
+        const deltaX = currentX - startX;
+        if (Math.abs(deltaX) >= 15) {
+          window.appState.boxX += deltaX;
+          window.appState.status = 'DRAGGED';
+          startX = currentX;
+        }
+      }
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      if (isDragging) {
+        window.appState.status = 'CLICKED';
+        isDragging = false;
+      }
+    });
+
+    // WebSocket Client
+    const ws = new WebSocket(`ws://${location.host}/stream`);
+    ws.onopen = () => { statusDiv.innerText = "Stream Connected. Awaiting ticks..."; };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        // Spec 4: Boundary check for scientific notation or fractional corruption
+        if (typeof data.balance === 'string' && (data.balance.includes('e+') || isNaN(Number(data.balance)))) {
+          throw new TypeError(`Corrupted mathematical state: ${data.balance}`);
+        }
+
+        if (data.type === 'STATE_UPDATE') {
+          window.appState.status = data.status;
+          window.appState.balance = data.balance;
+        }
+      } catch (err) {
+        window.appState.hasError = true;
+        errorDiv.style.display = 'block';
+        errorDiv.innerText = `[Exception Boundary Triggered]: ${err.message}`;
+      }
+    };
+  </script>
+</body>
+</html>
